@@ -1,33 +1,49 @@
 library(writexl)
+library(readxl)
 library(dplyr)
-Despesa <- c("Clube Ifood","Ifood", "Zona Sul", "Metro", "Uber", "Zona Sul", "Cafe e Bar Mm", 
-             "Libertadores", "Mania de torta","Xbox game pass", "Spotify", "Corrente",
-             "Docura Carioca", "Cafe e Bar Mm","Fluminense Socio")
+library(telegram.bot)
 
-Preco <- c(4.95, 33.12, 27.55, 6.90, 34.99, 29.83, 18, 130, 19, 29.99, 21.90, 75.83, 5, 20, 160)
+Despesas <- read_excel("C:/Users/joaoba/Desktop/Despesas.xlsx")
 
-Tipo <- c("Alimentação", "Alimentação", "Mercado", "Transporte", "Transporte", "Mercado", 
-          "Alimentação", "Fluminense", "Alimentação", "Entretenimento", "Entretenimento", 
-          "Cuidado pessoal", "Alimentação", "Alimentação", "Fluminense") 
-
- Data <- c("12-10-2023", "12-10-2023", "13-10-2023", "14-10-2023", 
-                                        "15-10-2023", "15-10-2023", "16-10-2023", "16-10-2023"
-                                        ,"16-10-2023", "17-10-2023", "18-10-2023", "17-10-2023", 
-                                        "17-10-2023", "17-10-2023", "11-11-2023") 
- 
-Data<- as.Date(Data, format = "%d-%m-%Y")
- 
-Parcela_inicial <-c(1,1,1,1,1,1,1,1,1,12,12,1,1,1,2)
-
-Parcela_final <- c(1,1,1,1,1,1,1,1,1,12,12,1,1,1,6)
-
-Renda <- 2246.88
-for( i in 1:length(Preco))
-{
-  Renda[i + 1] <- Renda[i] - Preco[i]
+start <- function(bot, update) {
+  bot$sendMessage(
+    chat_id = update$message$chat$id,
+    text = sprintf("Oi %s!\nColoque o pagamento da seguinte maneira: 
+\nNome (O estabelecimento onde foi comprado o produto)
+\nTipo (Qual o tipo de produto foi comprado, é dividido em Alimentação, Mercado, Transporte, Entretenimento, Cuidado pessoal, Fluminense, Conta)
+\nPreço (O quanto foi pago pelo produto) 
+\nData (Quando foi feita a compra, o formato é dia-mes-ano)
+\nParcela inicial (Qual a parcela foi paga dessa compra, caso seja algo não parcelado, então será a parcela 1) 
+\nParcela_final (Qual é a parcela final dessa compra, caso seja algo não parcelado, então será a parcela 1)
+\nLembre-se, os valores serão divididos por vírgula, NÃO ESQUEÇA.", update$message$from$first_name)
+  )
 }
-Renda <- Renda[-1]
-  
-Despesas <- tibble(Despesa, Tipo , Preco, Data, Parcela_inicial, Parcela_final, Renda)
 
- 
+updater <- Updater("token") + CommandHandler("start", start)
+
+updater$start_polling()
+
+bot <- Bot(token = "token")
+
+
+# Get updates
+updates <- bot$getUpdates()
+
+gasto <- NULL
+
+for(i in 1:length(updates))
+{
+  gasto <- updates[[i]][["message"]][["text"]]
+  
+  gasto <- strsplit(gasto[1], split = ",")
+  gasto <- gasto[[1]]
+  gasto <- as.data.frame((t(gasto)))
+  gasto[[3]] <- as.numeric(gasto[[3]])
+  gasto[[7]] <- Despesas$Renda[nrow(Despesas)] - gasto[[3]]
+  colnames(gasto) <- colnames(Despesas)
+  Despesas <- bind_rows(Despesas,gasto)
+}
+
+Despesas$Data<- as.Date(Despesas$Data, format = "%d-%m-%Y")
+
+write_xlsx(Despesas, "Despesas.xlsx")
